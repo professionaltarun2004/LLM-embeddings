@@ -255,7 +255,15 @@ The recorded environment was Python 3.12.5, NumPy 2.5.0, Matplotlib 3.11.0, and 
 \section{Conclusion}
 For the tested synthetic matrix, row-wise RMSNorm changed vector magnitudes and pairwise Euclidean distances while leaving cosine similarities unchanged to numerical precision. For this row-local operation, normalization before lookup and after lookup are algebraically identical arrangements of the same table \(E\). The experiments found identical fixed-table outputs and, for one controlled nonzero-gradient loss, numerically equal gradients with respect to \(E\). Direct optimization of a normalized representation, optimizer behavior, and downstream model effects remain untested.
 
-\bibliographystyle{IEEEtran}
-\bibliography{references}
+\begin{thebibliography}{3}
+\bibitem{xiong2020layernorm}
+R. Xiong, Y. Yang, D. He, K. Zheng, S. Zheng, C. Xing, H. Zhang, Y. Lan, L. Wang, and T.-Y. Liu, ``On Layer Normalization in the Transformer Architecture,'' in \emph{Proceedings of the 37th International Conference on Machine Learning}, vol. 119, pp. 10524--10533, PMLR, 2020, arXiv:2002.04745.
+
+\bibitem{zhang2019rmsnorm}
+B. Zhang and R. Sennrich, ``Root Mean Square Layer Normalization,'' in \emph{Advances in Neural Information Processing Systems 32}, pp. 12360--12371, 2019, arXiv:1910.07467.
+
+\bibitem{vaswani2017attention}
+A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin, ``Attention Is All You Need,'' in \emph{Advances in Neural Information Processing Systems 30}, pp. 5998--6008, 2017, arXiv:1706.03762.
+\end{thebibliography}
 
 \end{document}
