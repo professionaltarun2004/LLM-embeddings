@@ -36,6 +36,8 @@ What happens to the information and geometry of token embeddings when normalizat
 
 Two parameterizations must be distinguished. In the tested formulation, raw table \(E\) is the underlying parameter and normalization is part of the forward computation, \(N_{\epsilon}(E)\). A separate formulation would treat the normalized representation \(U\) itself as the optimized variable and use \(U\) in the forward computation. The latter is a different optimization problem and is not tested here.
 
+Normalization placement is not universally innocuous. Prior work has shown that the location of normalization within Transformer blocks can influence gradient behavior and optimization stability \cite{xiong2020layernorm}. RMSNorm itself was proposed as a simpler normalization mechanism based on root mean square statistics \cite{zhang2019rmsnorm}. The Transformer architecture uses residual connections and layer normalization in its sequence-modeling blocks \cite{vaswani2017attention}. Motivated by this broader context, this work isolates a narrower operation: moving row-wise RMSNorm across token-embedding lookup. It evaluates this arrangement under controlled synthetic experiments and makes no claim of novelty.
+
 The investigation proceeds in three steps. Experiment 0 measures what row-wise RMSNorm changes in a seeded synthetic table's geometry. Experiment 1 then tests whether placing that operation before or after lookup changes a fixed-table output. Experiment 2 compares gradients with respect to the same trainable raw table under one controlled loss. Together, the experiments characterize these computations; they do not evaluate optimizer updates or downstream model behavior.
 
 \section{Background and Problem Formulation}
@@ -59,7 +61,7 @@ For \(x\in\mathbb{R}^d\), define the implemented normalization as
 N_{\epsilon}(x)=\frac{x}{\max(\operatorname{RMS}(x),\epsilon)}.
 \label{eq:rmsnorm}
 \end{equation}
-The experiments use \(\epsilon=10^{-8}\), reduce over the feature axis, and use no learned gain or bias. The row-wise extension \(N_{\epsilon,\mathrm{row}}(E)\) applies \(N_{\epsilon}\) independently to each of the \(V\) rows.
+RMSNorm was introduced as a computationally simpler alternative to LayerNorm that removes re-centering while retaining re-scaling normalization \cite{zhang2019rmsnorm}. The experiments use \(\epsilon=10^{-8}\), reduce over the feature axis, and use no learned gain or bias. The row-wise extension \(N_{\epsilon,\mathrm{row}}(E)\) applies \(N_{\epsilon}\) independently to each of the \(V\) rows.
 
 \section{Mathematical Formulation}
 The two pathways compare lookup followed by normalization with row normalization followed by lookup:
@@ -221,6 +223,8 @@ On the synthetic matrix, RMSNorm changed row magnitudes and pairwise Euclidean d
 \subsection{Does Moving Normalization Across Lookup Change the Computation?}
 For a row-wise normalization function applied independently to each embedding row, moving that operation across a row-selection lookup is algebraically equivalent when the underlying trainable parameter remains the same raw embedding table \(E\). Experiments 1 and 2 provide numerical checks of fixed-table outputs and, for one controlled objective, gradients with respect to \(E\). The experiments do not show that normalization placement never matters.
 
+Prior work has shown that layer-normalization location within Transformer blocks can affect gradient behavior and warm-up requirements \cite{xiong2020layernorm}. That work studies normalization inside Transformer architectures, not the embedding-lookup identity evaluated here. The present result is limited to the specific row-wise operation and parameterization defined above.
+
 \subsection{What Remains Unresolved?}
 \textbf{Parameterization A:} raw embedding table \(E\) is optimized, and the forward computation uses \(N_{\epsilon}(E)\).
 
@@ -240,18 +244,18 @@ The evidence is deliberately narrow:
 \end{itemize}
 
 \section{Reproducibility}
-The experiment scripts, configuration files, numerical results, figures, and research log are maintained in the repository at \url{https://github.com/professionaltarun2004/LLM-embeddings}. Relevant experiment checkpoints are Experiment 0, \texttt{f3c34aaf5953e66b5980f1615cd7b81f08b46195}; Experiment 1, \texttt{d8f88daa35ca89060a7890d2ddbc910518c4f3f4}; and Experiment 2, \texttt{5d331e65837b0af52938e55a58b63182cd2697c5}. From the repository root, the experiments can be rerun with:
+The experiments, configurations, numerical result artifacts, and figures are version-controlled in the accompanying repository, which contains the complete experiment history and checkpoint commits for reproducibility: \url{https://github.com/professionaltarun2004/LLM-embeddings}. Experiment code is in \texttt{experiments/00\_embedding\_geometry/}, \texttt{experiments/01\_normalization\_placement/}, and \texttt{experiments/02\_trainable\_embedding\_gradients/}. Results are in \texttt{results/00\_embedding\_geometry/}, \texttt{results/01\_normalization\_placement/}, and \texttt{results/02\_trainable\_embedding\_gradients/}; Experiment 0 plots are in \texttt{figures/00\_embedding\_geometry/}. From the repository root, run:
 \begin{verbatim}
 python -B experiments/00_embedding_geometry/run.py
 python -B experiments/01_normalization_placement/run.py
 python -B experiments/02_trainable_embedding_gradients/run.py
 \end{verbatim}
-Experiment 0 artifacts are in \texttt{results/00\_embedding\_geometry/} and \texttt{figures/00\_embedding\_geometry/}; Experiment 1 artifacts are in \texttt{results/01\_normalization\_placement/}; Experiment 2 artifacts are in \texttt{results/02\_trainable\_embedding\_gradients/}. The recorded environment was Python 3.12.5, NumPy 2.5.0, Matplotlib 3.11.0, and PyTorch 2.4.1+cpu.
+The recorded environment was Python 3.12.5, NumPy 2.5.0, Matplotlib 3.11.0, and PyTorch 2.4.1+cpu.
 
 \section{Conclusion}
 For the tested synthetic matrix, row-wise RMSNorm changed vector magnitudes and pairwise Euclidean distances while leaving cosine similarities unchanged to numerical precision. For this row-local operation, normalization before lookup and after lookup are algebraically identical arrangements of the same table \(E\). The experiments found identical fixed-table outputs and, for one controlled nonzero-gradient loss, numerically equal gradients with respect to \(E\). Direct optimization of a normalized representation, optimizer behavior, and downstream model effects remain untested.
 
-\section*{References}
-No formal bibliographic sources are available for this research checkpoint; no external citations are included.
+\bibliographystyle{IEEEtran}
+\bibliography{references}
 
 \end{document}
