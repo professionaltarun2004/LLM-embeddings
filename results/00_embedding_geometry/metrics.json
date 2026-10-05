@@ -2,7 +2,23 @@
   "config": {
     "seed": 1729,
     "vocabulary_size": 128,
-    "embedding_dim": 32
+    "embedding_dim": 32,
+    "matrix_shape": [
+      128,
+      32
+    ],
+    "normalization": {
+      "method": "RMSNorm",
+      "axis": -1,
+      "epsilon": 1e-08,
+      "formula_convention": "x / max(sqrt(mean(x**2, axis=-1, keepdims=True)), epsilon)"
+    },
+    "pair_selection": "all unique row pairs (i < j)"
+  },
+  "reproducibility": {
+    "python_version": "3.12.5",
+    "numpy_version": "2.5.0",
+    "matplotlib_version": "3.11.0"
   },
   "raw": {
     "mean_row_norm": 5.509094782076966,
@@ -15,5 +31,25 @@
     "std_row_norm": 1.2486924693357873e-15,
     "mean_coordinate": 0.0028884287976014816,
     "std_coordinate": 0.9999958284808398
+  },
+  "pairwise_euclidean_distance_ratio": {
+    "mean": 1.0304944953052335,
+    "median": 1.0211127066734282,
+    "std": 0.09258642788685187,
+    "min": 0.8174383444097116,
+    "max": 1.459169679026018,
+    "percentiles": {
+      "5": 0.8968654222475125,
+      "25": 0.9629300555423519,
+      "75": 1.0857218502884525,
+      "95": 1.1979693168586611
+    }
+  },
+  "pairwise_cosine_similarity": {
+    "raw_mean": 0.0011577387174629072,
+    "normalized_mean": 0.0011577387174629063,
+    "mean_absolute_change": 3.355198797876539e-17,
+    "max_absolute_change": 2.7755575615628914e-16,
+    "allclose_atol_1e-12_rtol_1e-12": true
   }
 }
