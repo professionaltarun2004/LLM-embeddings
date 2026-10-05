@@ -131,3 +131,9 @@ Created an Overleaf-ready LaTeX report at [paper/main.tex](../paper/main.tex), w
 Numerical values, formulas, token IDs, environment versions, and experiment commit hashes were checked against the code and result artifacts. The source explicitly limits the gradient result to its one float64 MSE setup and does not claim optimizer or Transformer equivalence. The paper contains no external citations and does not present an Experiment 3 as completed.
 
 Compilation could not be verified in this environment: the built-in LaTeX compiler returned “Unable to find standard directories for platform,” and no local pdfLaTeX, XeLaTeX, LuaLaTeX, or latexmk executable was found. No LaTeX build artifacts were generated. Compile status is therefore unverified; the source is prepared for Overleaf or a configured LaTeX toolchain.
+
+### IEEE conference-style revision — 2026-10-05
+
+Reformatted the existing source in place to use the `IEEEtran` conference class, two-column IEEE hierarchy, author block, abstract and Index Terms, compact tables, separate column-width figures, and a minimal references section without invented citations. The research content remains limited to Experiments 0--2. The author block uses the name, research affiliation, country, and GitHub handle supplied for this revision; repository inspection found no alternate author affiliation or email.
+
+The figures remain copies of the existing Experiment 0 plots. Result values, equations, and experimental claims are unchanged except for clearer presentation of the algebraic identity and its distinction from a different trainable parameterization. The built-in compiler was retried on the revised source and again returned “Unable to find standard directories for platform”; no local LaTeX compiler is installed, so PDF pagination and visual fit could not be verified here.

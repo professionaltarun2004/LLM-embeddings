@@ -1,226 +1,253 @@
-\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
+\documentclass[conference]{IEEEtran}
+
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
-\usepackage{hyperref}
-\usepackage{microtype}
-\graphicspath{{figures/}}
-\title{Where Is RMS Normalization Applied?\\
-\large Embedding Geometry, Fixed-Table Placement, and Gradient Evidence Through Experiment 2}
-\author{}
-\date{October 5, 2026}
+\usepackage{url}
+
+\title{On the Placement of RMS Normalization in Token Embedding Representations}
+
+\author{
+\IEEEauthorblockN{Tarun Balivada}
+\IEEEauthorblockA{\textit{AI/ML Engineering Research}\\
+India\\
+GitHub: \url{https://github.com/professionaltarun2004/LLM-embeddings}}
+}
+
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This report records three controlled experiments on row-wise root-mean-square normalization of token embeddings. Experiment 0 measured pairwise geometry on a seeded synthetic matrix: cosine similarities changed by at most $2.78\times10^{-16}$ and the mean normalized-to-raw Euclidean distance ratio was $1.030494$. Experiment 1 found identical outputs for lookup-then-normalize and normalize-table-then-lookup with the same fixed table. Experiment 2 found equal, nonzero embedding-table gradients for one deterministic mean-squared-error objective. These findings are limited to the tested operation and synthetic data; no optimizer updates, learned language-model embeddings, or Transformer behavior have been studied.
+Normalization can be applied to embedding vectors after lookup or to the rows of an embedding table before lookup. This paper asks whether these placements alter embedding geometry, fixed-table representations, or gradients with respect to a shared trainable table. Three controlled experiments use seeded synthetic embeddings and row-wise RMSNorm. In Experiment 0, the mean normalized-to-raw pairwise Euclidean distance ratio was 1.030494, while the maximum absolute cosine-similarity change was \(2.78\times10^{-16}\). In Experiment 1, lookup-then-normalize and normalize-table-then-lookup produced identical fixed-table representations. In Experiment 2, both paths produced the same loss (1.1457136942185433) and numerically equal, nonzero gradients for one deterministic mean-squared-error objective. These results are limited to the tested row-wise operation and synthetic data. No optimizer update, learned embedding, language task, or Transformer was evaluated.
 \end{abstract}
 
+\begin{IEEEkeywords}
+RMSNorm, token embeddings, embedding geometry, normalization placement, gradient analysis
+\end{IEEEkeywords}
+
 \section{Introduction}
-This investigation began with a course/session discussion about incorporating normalization into an embedding representation rather than applying it after embedding lookup. No formal bibliographic source for that discussion is available in the repository, so no citation metadata is invented.
+This investigation originated in a course/session discussion about incorporating normalization into an embedding representation rather than applying it after embedding lookup. The refined research question is:
 
-The investigation proceeds in stages. Experiment 0 characterizes the selected row-wise normalization's effects on vector norms and pairwise geometry. Experiment 1 asks whether normalization before or after lookup produces different values for a fixed embedding table. Experiment 2 compares derivatives with respect to the shared trainable table using a deliberately minimal fixed target and loss. These experiments do not model language, train an embedding table, or instantiate a Transformer.
-
-\section{Research Question}
 \begin{quote}
 What happens to the information and geometry of token embeddings when normalization is incorporated into the embedding representation itself, rather than applied after embedding lookup---and does the placement of normalization affect downstream model behavior?
 \end{quote}
 
-The phrase ``incorporated into the embedding representation'' can describe different parameterizations. This report distinguishes lookup followed by normalization, normalization of a table followed by lookup, and a normalized representation that is itself the trainable parameter. The experiments compare the first two forms while retaining the same underlying raw table. They do not test the third.
+The experiments form a controlled progression. Experiment 0 measures geometric effects on a synthetic table. Experiment 1 compares two forward-computation arrangements for a fixed table. Experiment 2 compares gradients with respect to the same raw table under one scalar loss. The distinction between a raw table passed through normalization and a normalized representation used directly as the trainable parameter is central: only the former was tested.
 
-\section{Background}
-\subsection{Token IDs and the embedding table}
-Let the vocabulary contain $V$ token IDs. A token ID $i\in\{0,\ldots,V-1\}$ selects row $i$ from an embedding table $E\in\mathbb{R}^{V\times d}$, where $d$ is the embedding dimension. Lookup changes which vector is selected; it does not change token IDs or the vocabulary. In Experiments 0--2, the table is synthetic and initialized by a seeded standard-normal draw. In Experiment 2, the table is a trainable tensor for gradient calculation, but it is not updated.
+\section{Background and Problem Formulation}
+\subsection{Token IDs and Embedding Tables}
+Let a vocabulary contain \(V\) token IDs, and let \(E\in\mathbb{R}^{V\times d}\) be an embedding table with dimension \(d\). An ID \(i\in\{0,\ldots,V-1\}\) selects row \(E_{i,:}\). Lookup selects vectors; it does not change token IDs or vocabulary. Throughout Experiments 0--2, \(E\) is synthetic and initialized by a seeded standard-normal draw. In Experiment 2, the table is marked trainable for differentiation, but no update is performed.
 
-\subsection{Row-wise RMSNorm}
-For a vector $x\in\mathbb{R}^d$, define
-\begin{align}
-  \operatorname{RMS}(x) &= \sqrt{\frac{1}{d}\sum_{k=1}^{d}x_k^2}, \\
-  N_\epsilon(x) &= \frac{x}{\max(\operatorname{RMS}(x),\epsilon)}.
-\end{align}
-The experiments use $\epsilon=10^{-8}$ and apply this operation independently to each row over the feature axis. This implementation has no learned gain or bias. For nonzero rows whose RMS exceeds $\epsilon$, normalization scales the row by a positive scalar and sets its RMS to one.
+\subsection{Row-Wise RMSNorm}
+For \(x\in\mathbb{R}^d\), the implemented normalization is
+\begin{equation}
+\operatorname{RMS}(x)=\sqrt{\frac{1}{d}\sum_{k=1}^{d}x_k^2},
+\qquad
+N_{\epsilon}(x)=\frac{x}{\max(\operatorname{RMS}(x),\epsilon)}.
+\label{eq:rmsnorm}
+\end{equation}
+The experiments use \(\epsilon=10^{-8}\), reduce over the feature axis, and apply the same map independently to each row. No learned gain or bias is used.
+
+\subsection{Normalization Placement}
+For a token-ID sequence \(I=(i_1,\ldots,i_m)\), lookup is the row-selection operator \(L_I(E)\), with \([L_I(E)]_{t,:}=E_{i_t,:}\). Two paths are considered:
+\begin{enumerate}
+\item Lookup, then normalization: \(E[I]\rightarrow N_{\epsilon}\).
+\item Normalize every table row, then lookup: \(N_{\epsilon,\mathrm{row}}(E)\rightarrow\) lookup.
+\end{enumerate}
+Both paths retain the raw table \(E\) as the underlying parameter. They do not test making a normalized representation itself the parameter.
 
 \section{Mathematical Formulation}
-For token IDs $I=(i_1,\ldots,i_m)$, define lookup $L_I(E)\in\mathbb{R}^{m\times d}$ by
-\[
-  [L_I(E)]_{t,:}=E_{i_t,:}.
-\]
-Let $N_{\epsilon,\mathrm{row}}(E)$ denote applying $N_\epsilon$ independently to every row. The pathways in Experiments 1 and 2 are
-\begin{align}
-  Y_A(E,I) &= N_{\epsilon,\mathrm{row}}(L_I(E)), &&\text{lookup, then normalize}, \\
-  Y_B(E,I) &= L_I(N_{\epsilon,\mathrm{row}}(E)), &&\text{normalize the table, then lookup}.
-\end{align}
-Because the same deterministic function is applied independently to each row,
-\begin{align}
-  [N_{\epsilon,\mathrm{row}}(E)]_{i,:} &= N_\epsilon(E_{i,:}), \\
-  Y_B(E,I)_{t,:} &= N_\epsilon(E_{i_t,:}) = Y_A(E,I)_{t,:}.
-\end{align}
-Thus, for this row-local formulation, the two expressions are the same function of $E$ and $I$. This algebraic observation is not a claim about normalization operations that mix tokens, use different statistics, or use different parameterizations. The experiments numerically check the identity and its gradient for the tested implementation.
+Define \(N_{\epsilon,\mathrm{row}}(E)\) as applying Eq.~\eqref{eq:rmsnorm} independently to each row. The two outputs are
+\begin{equation}
+\begin{aligned}
+Y_A(E,I)&=N_{\epsilon,\mathrm{row}}\!\left(L_I(E)\right),\\
+Y_B(E,I)&=L_I\!\left(N_{\epsilon,\mathrm{row}}(E)\right).
+\end{aligned}
+\label{eq:paths}
+\end{equation}
+Equation~\eqref{eq:paths} formalizes the two placements compared in the experiments.
+Because lookup selects rows and the same map acts independently on each row,
+\begin{equation}
+[N_{\epsilon,\mathrm{row}}(E)]_{i,:}=N_{\epsilon}(E_{i,:}),
+\qquad
+Y_B(E,I)_{t,:}=N_{\epsilon}(E_{i_t,:})=Y_A(E,I)_{t,:}.
+\label{eq:commute}
+\end{equation}
+Thus the paths are algebraically identical under the stated row-local formulation. This reasoning does not cover normalization that mixes statistics across rows, uses different statistics at the two locations, or changes the parameterization. It is a mathematical property of this formulation; the experiments provide numerical checks for the implemented cases.
 
-\subsection{A distinct trainable parameterization}
-The tested paths retain raw $E$ as the underlying trainable tensor and compute $N(E)$ as part of the forward function. A different design would make a normalized representation $U$ itself the parameter, possibly with a constraint or re-normalization rule. Its parameter space and gradient mapping need not be those of raw $E$ passed through $N$. In general,
-\[
-  \nabla_E\mathcal{L}(N(E)) = J_N(E)^\top\nabla_{N(E)}\mathcal{L},
-\]
-where $J_N$ is the Jacobian of normalization. Directly optimizing $U$ is a distinct setup that must be specified before comparison. The current experiments do not test it.
+A third setup would optimize a normalized representation \(U\) directly, rather than optimize raw \(E\) and compute \(N_{\epsilon}(E)\). That is a different parameterization, with a different relation between the optimized variable and the effective embedding vectors. Experiments 0--2 do not evaluate it.
 
 \section{Experimental Methodology}
-\subsection{Reproducibility and controlled variables}
-Experiments 0 and 1 use NumPy's seeded generator with seed 1729, vocabulary size 128, embedding dimension 32, and the RMSNorm convention above. Experiment 2 uses the same initialization methodology and an exactly shared table tensor for both paths. The formula, feature axis, and epsilon are retained. Experiment-specific token IDs and tolerances are recorded with the results. The observed environment was Python 3.12.5, NumPy 2.5.0, Matplotlib 3.11.0, and PyTorch 2.4.1+cpu.
+\subsection{Experimental Controls}
+Experiments 0 and 1 use seed 1729, vocabulary size 128, and dimension 32. Experiment 2 uses the same seeded initialization methodology and the same underlying tensor in both paths. All experiments use the same row-wise RMSNorm convention and epsilon. Experiment 1 uses token IDs 0--127; Experiment 2 uses \([3,17,42,91]\). No external corpus, pretrained embedding, optimizer, or Transformer is used.
 
-\subsection{Measurements}
-Experiment 0 enumerates all $128\cdot127/2=8{,}128$ unique row pairs. It records pairwise Euclidean distances before and after normalization, normalized-to-raw distance ratios, and pairwise cosine similarities. Experiment 1 compares corresponding representations and pairwise geometry using all token IDs. Experiment 2 compares forward representations, scalar losses, and full gradients with respect to $E$ for token IDs $[3,17,42,91]$. Relative differences exclude reference elements whose absolute magnitude is at most $10^{-12}$. Numerical equality checks use absolute and relative tolerances of $10^{-12}$.
+\subsection{Metrics and Evaluation}
+Experiment 0 evaluates all \(128\cdot127/2=8{,}128\) unique row pairs. Experiment 1 compares corresponding outputs and their pairwise geometry. Experiment 2 compares representations, scalar losses, and full gradients with respect to \(E\). Relative differences omit reference elements with magnitude at most \(10^{-12}\). Numerical equality checks use \(\mathrm{atol}=10^{-12}\) and \(\mathrm{rtol}=10^{-12}\).
 
 \section{Experiment 0: Embedding Geometry}
 \subsection{Setup}
-A synthetic standard-normal matrix of shape $128\times32$ was generated with seed 1729. RMSNorm was applied row-wise with $\epsilon=10^{-8}$. This is not a learned language-model embedding table.
+A synthetic standard-normal \(128\times32\) matrix was generated using seed 1729. RMSNorm was applied independently to each row with \(\epsilon=10^{-8}\). The matrix is not a learned language-model embedding table.
 
 \subsection{Results}
-\begin{table}[ht]
-\centering
-\caption{Experiment 0 pairwise geometry results for the synthetic matrix.}
+Table~\ref{tab:exp0} reports the pairwise measurements. Fig.~\ref{fig:distances} and Fig.~\ref{fig:cosines} show the saved comparisons.
+
+\begin{table}[t]
+\caption{EXPERIMENT 0: PAIRWISE GEOMETRY ON THE SYNTHETIC TABLE}
 \label{tab:exp0}
-\begin{tabular}{lr}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.64\columnwidth}r}
 \toprule
-Measurement & Result \\
+Measurement & Result\\
 \midrule
-Unique row pairs & 8,128 \\
-Mean row L2 norm, raw $\rightarrow$ RMSNorm & $5.509095\rightarrow5.656854$ \\
-Normalized/raw Euclidean distance ratio, mean & 1.030494 \\
-Normalized/raw Euclidean distance ratio, median & 1.021113 \\
-Normalized/raw Euclidean distance ratio, standard deviation & 0.092586 \\
-Normalized/raw Euclidean distance ratio, range & 0.817438--1.459170 \\
-Maximum absolute pairwise cosine change & $2.78\times10^{-16}$ \\
+Unique row pairs & 8,128\\
+Mean row \(L_2\) norm, raw \(\rightarrow\) normalized & \(5.5091\rightarrow5.6569\)\\
+Distance-ratio mean & 1.030494\\
+Distance-ratio median & 1.021113\\
+Distance-ratio standard deviation & 0.092586\\
+Distance-ratio range & 0.817438--1.459170\\
+Maximum absolute cosine change & \(2.78\times10^{-16}\)\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[ht]
+\begin{figure}[t]
 \centering
-\includegraphics[width=0.47\linewidth]{pairwise_distances.png}\hfill
-\includegraphics[width=0.47\linewidth]{pairwise_cosines.png}
-\caption{Existing Experiment 0 plots. Left: pairwise Euclidean distances before and after RMSNorm; the dashed diagonal marks equality. Right: pairwise cosine similarities before and after RMSNorm; points lie on the equality diagonal to numerical precision. Both plots use the generated synthetic matrix.}
-\label{fig:exp0}
+\includegraphics[width=0.92\columnwidth]{figures/pairwise_distances.png}
+\caption{Experiment 0 pairwise Euclidean distances before and after RMSNorm. The diagonal denotes unchanged distances.}
+\label{fig:distances}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{figures/pairwise_cosines.png}
+\caption{Experiment 0 pairwise cosine similarities before and after RMSNorm. The values agree to numerical precision.}
+\label{fig:cosines}
 \end{figure}
 
 \subsection{Interpretation}
-The measured pairwise cosine similarities were preserved to numerical precision, while pairwise Euclidean distances changed. This is consistent with each nonzero row being multiplied by a positive scalar: its direction is preserved, while distances between vectors with different row scales can change. The result characterizes this synthetic matrix and operation only; it does not establish the geometry of learned embeddings.
+The measured row norms changed, and the pairwise Euclidean distances changed. The cosine similarities changed by at most \(2.78\times10^{-16}\). This is consistent with positive row-wise rescaling: it preserves each nonzero row's direction, but vectors with different scale factors can have different Euclidean distances. These observations concern this synthetic matrix only.
 
 \section{Experiment 1: Normalization Placement}
-\subsection{Setup and comparison}
-Experiment 1 used the same seeded raw matrix and all token IDs 0 through 127. It compared $Y_A$ and $Y_B$ as defined above, with no training, Transformer, external dataset, or pretrained embedding. Outputs were tested for numerical equality with $\texttt{atol}=10^{-12}$ and $\texttt{rtol}=10^{-12}$.
+\subsection{Experimental Design}
+Experiment 1 compares Path A, \(E[I]\rightarrow N_{\epsilon}\), with Path B, \(N_{\epsilon,\mathrm{row}}(E)\rightarrow\) lookup. Both conditions use the same raw table, token IDs, seed, RMSNorm, and epsilon. The table is fixed; no training, external data, or Transformer is involved.
 
 \subsection{Results}
-\begin{table}[ht]
-\centering
-\caption{Experiment 1 differences between the two fixed-table pathways.}
+Table~\ref{tab:exp1} summarizes the differences. All reported differences were zero, and the outputs passed the stated equality tolerances.
+
+\begin{table}[t]
+\caption{EXPERIMENT 1: DIFFERENCES BETWEEN FIXED-TABLE PATHS}
 \label{tab:exp1}
-\begin{tabular}{lr}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.73\columnwidth}r}
 \toprule
-Measurement & Result \\
+Measurement & Difference\\
 \midrule
-Maximum absolute elementwise difference & 0 \\
-Mean absolute elementwise difference & 0 \\
-Maximum meaningful relative difference & 0 \\
-Per-token Euclidean difference & 0 \\
-Pairwise Euclidean distance difference & 0 \\
-Pairwise cosine similarity difference & 0 \\
-Numerically equal at $10^{-12}$ absolute and relative tolerance & Yes \\
+Maximum / mean absolute elementwise difference & 0 / 0\\
+Maximum meaningful relative difference & 0\\
+Per-token \(L_2\) difference & 0\\
+Pairwise Euclidean distance difference & 0\\
+Pairwise cosine similarity difference & 0\\
+Equality at \(\mathrm{atol}=\mathrm{rtol}=10^{-12}\) & Yes\\
 \bottomrule
 \end{tabular}
 \end{table}
-For the tested table and implementation, normalization before lookup and normalization after lookup produced identical forward representations. This is consistent with the row-wise algebra above, but is not a universal result for every possible normalization architecture.
+
+For the tested table and implementation, the paths produced identical forward representations. The result is an empirical check of Eq.~\eqref{eq:commute}, not a claim about all normalization mechanisms.
 
 \section{Experiment 2: Trainable Embedding Gradients}
-\subsection{Setup and loss}
-Experiment 2 asks whether the fixed-table forward result also appears in gradients with respect to trainable $E$. Both paths use the same PyTorch float64 tensor with shape $128\times32$, initialized by the seeded methodology, and token IDs $[3,17,42,91]$. An assertion checks that the two conceptual paths reference the same tensor object and exact values. No optimizer or parameter update is used.
+\subsection{Experimental Design}
+Experiment 2 asks whether the forward equivalence also appears in gradients with respect to the same trainable raw table. Both paths use one shared \(128\times32\) PyTorch float64 tensor initialized with seed 1729, and token IDs \([3,17,42,91]\). An assertion checks that the conceptual table references are the same object and have exactly equal values. No optimizer or parameter update is performed.
 
-The target is a deterministic float64 $\operatorname{linspace}(-0.5,0.5)$ reshaped to $4\times32$. The downstream computation is the identity and the loss for each path is
-\[
-  \mathcal{L}(Y)=\operatorname{mean}\left((Y-T)^2\right),
-\]
-where $T$ is the same fixed target for paths A and B. This objective yields nonzero gradients for the selected rows in this run.
+Path A looks up the selected rows and then normalizes them. Path B normalizes the rows of the table and then looks up the same token IDs. Both paths use the same downstream operation, target, loss, and equality tolerance.
 
-\subsection{Gradient comparison}
-Path A computes $E[I]$, applies RMSNorm, then evaluates the loss. Path B applies row-wise RMSNorm to $E$, looks up the same $I$, then evaluates the same loss. Autodiff computes $\nabla_E\mathcal{L}_A$ and $\nabla_E\mathcal{L}_B$. Forward and gradient comparisons use $10^{-12}$ absolute and relative tolerances.
+\subsection{Loss Function}
+The downstream mapping is the identity. The target \(T\) is a deterministic float64 linspace from \(-0.5\) to \(0.5\), reshaped to \(4\times32\). For a representation \(Y\), the scalar loss is
+\begin{equation}
+\mathcal{L}(Y)=\operatorname{mean}\!\left((Y-T)^2\right).
+\label{eq:loss}
+\end{equation}
+Both paths use the same target and the objective in Eq.~\eqref{eq:loss}. No additional trainable parameter is introduced.
 
-\begin{table}[ht]
-\centering
-\caption{Experiment 2 results for the tested token subset and fixed MSE objective.}
+\subsection{Results}
+Table~\ref{tab:exp2} reports the forward, loss, and gradient comparisons. The two losses are equal. The gradient norm is nonzero in both paths, and the measured gradient difference is zero.
+
+\begin{table}[t]
+\caption{EXPERIMENT 2: FORWARD, LOSS, AND EMBEDDING-GRADIENT COMPARISON}
 \label{tab:exp2}
-\begin{tabular}{lr}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{p{0.58\columnwidth}r}
 \toprule
-Measurement & Result \\
+Measurement & Result\\
 \midrule
-Maximum / mean forward absolute difference & 0 / 0 \\
-Forward maximum relative difference & 0 \\
-Loss, path A & 1.1457136942185433 \\
-Loss, path B & 1.1457136942185433 \\
-Absolute loss difference & 0 \\
-Maximum / mean gradient absolute difference & 0 / 0 \\
-Maximum meaningful relative gradient difference & 0 \\
-$\|\nabla_E\mathcal{L}_A\|_2$ & 0.052245619117913686 \\
-$\|\nabla_E\mathcal{L}_B\|_2$ & 0.052245619117913686 \\
-$\|\nabla_E\mathcal{L}_A-\nabla_E\mathcal{L}_B\|_2$ & 0 \\
-Numerically equal at $10^{-12}$ absolute and relative tolerance & Yes \\
+Forward maximum / mean absolute difference & 0 / 0\\
+Forward maximum relative difference & 0\\
+Loss, Path A & 1.1457136942185433\\
+Loss, Path B & 1.1457136942185433\\
+Absolute loss difference & 0\\
+Gradient maximum / mean absolute difference & 0 / 0\\
+Gradient maximum meaningful relative difference & 0\\
+\(\|\nabla_E\mathcal{L}_A\|_2\) & \(5.2246\times10^{-2}\)\\
+\(\|\nabla_E\mathcal{L}_B\|_2\) & \(5.2246\times10^{-2}\)\\
+\(\|\nabla_E\mathcal{L}_A-\nabla_E\mathcal{L}_B\|_2\) & 0\\
+Equality at \(\mathrm{atol}=\mathrm{rtol}=10^{-12}\) & Yes\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The gradients were nonzero and numerically equal in this controlled run. This supports equivalence for the tested scalar objective and initialization; it is not evidence about optimizer updates or learned parameter trajectories.
-
 \section{Discussion}
-\subsection{What was measured}
-Experiment 0 measured changes in norms and pairwise geometry on one synthetic matrix. Experiment 1 numerically compared the two placements for a fixed table. Experiment 2 computed a loss and its gradient with respect to the same trainable table in both paths. All three experiments use row-wise RMSNorm with the same epsilon convention.
+The evidence separates into geometric effects and computational placement. Experiment 0 shows that row-wise RMSNorm altered vector magnitudes and pairwise Euclidean geometry in the synthetic table, while preserving pairwise cosine similarity to numerical precision. Experiments 1 and 2 show no measured change in forward representations, loss, or gradients when moving this same row-local operation across lookup while retaining raw \(E\).
 
-\subsection{What we infer}
-The Experiment 0 cosine and Euclidean results are consistent with row-wise positive rescaling preserving directions while changing pairwise Euclidean geometry. Experiments 1 and 2 are consistent with the algebraic identity $N_{\mathrm{row}}(E)[i]=N(E[i])$ for a map applied independently and identically to each row. Experiment 2 provides one measured gradient comparison with a nonzero gradient.
+The matching results follow from the algebra: both arrangements evaluate the same row-wise function of the same \(E\) and token IDs. Experiment 2 numerically verified equal gradients for one initialization and loss; its nonzero gradient norms rule out a zero-gradient comparison. The test did not take an optimizer step.
 
-If paths A and B are truly the same differentiable function of the same raw parameter $E$, use the same downstream objective, and are evaluated under the same optimizer state and update rule, there is no mathematical reason for their ideal optimizer trajectories to differ. Experiment 2 verifies equality of gradients for one loss at the tested initialization, but takes no step. Implementation, precision, state, or update-rule differences could change an actual comparison, but none were tested here. A different question arises if the normalized representation itself is made the parameter: that changes the parameterization and may change the relationship between updates and represented vectors. It must be studied separately.
+If two paths remain the same differentiable function of \(E\), use the same objective, and use the same optimizer state and update rule, ideal arithmetic gives no reason for their optimizer trajectories to differ. The more substantive open distinction is parameterization: optimizing raw \(E\) while applying \(N_{\epsilon}\) in the forward pass is not the same experimental design as making a normalized representation \(U\) itself the parameter. No update experiment has been run, and no claim about optimization equivalence is made.
 
 \section{Limitations}
+The evidence is deliberately narrow:
 \begin{itemize}
-  \item All embedding tables are synthetic; no learned language-model embedding table or external corpus was used.
-  \item Experiment 2 uses one token subset, one target, one identity downstream operation, and one MSE loss.
-  \item The gradient result is for float64 PyTorch 2.4.1+cpu and the recorded tolerances; other dtypes and implementations were not tested.
-  \item No optimizer, parameter update, training trajectory, learned representation, or Transformer was evaluated.
-  \item The experiments compare keeping raw $E$ as the parameter and applying row-wise RMSNorm in the forward computation. They do not compare a normalized representation used directly as the trainable parameter.
-  \item Downstream model behavior and the broader information content of learned embeddings remain unmeasured.
+\item Embeddings are synthetic; no pretrained model, corpus, or language task was used.
+\item No Transformer, downstream task, optimizer step, or learned representation was evaluated.
+\item Experiment 2 uses one deterministic target, one MSE objective, one token subset, and float64 only.
+\item No comparison with other normalization methods or normalization that mixes statistics across tokens was performed.
+\item No direct optimization of normalized embeddings was tested.
+\item Experiment 0 does not measure information content, and none of the experiments establishes behavior for learned language-model embeddings.
 \end{itemize}
 
-\section{Current Findings}
+\section{Current Findings and Open Questions}
+The results support four bounded findings:
 \begin{enumerate}
-  \item On the Experiment 0 synthetic matrix, row-wise RMSNorm changed vector magnitudes and pairwise Euclidean distances, while pairwise cosine changes were at numerical precision.
-  \item In Experiment 1, the two tested placements yielded identical fixed-table forward representations.
-  \item In Experiment 2, the two paths yielded equal forward representations, equal loss, and numerically equal nonzero gradients with respect to the shared trainable $E$ for the tested setup.
+\item RMSNorm altered Euclidean geometry in the synthetic table while preserving cosine similarity to numerical precision.
+\item Row-wise normalization before and after lookup produced identical fixed-table representations.
+\item The same two paths produced equal losses and numerically equal nonzero gradients for the tested trainable-table experiment.
+\item The paths are algebraically identical under the stated row-wise formulation.
 \end{enumerate}
-These are bounded findings, not a solution to the full research question.
-
-\section{Open Question / Next Investigation}
-The two tested paths retain raw $E$ as the parameter. Under the stated row-wise operator they are algebraically the same function of $E$. Experiment 2 found matching gradients for one loss, but no updates were made. The next unresolved issue is whether any proposed difference under optimization comes from a genuinely different parameterization---especially making the normalized representation itself trainable---or from other changes to the objective, optimizer state, numerical implementation, or update rule. These factors must be isolated before attributing an observed difference to normalization placement. No Experiment 3 is included or claimed here.
+The broader research question concerning parameterization, optimization dynamics, and downstream learned behavior remains open. In particular, direct optimization of a normalized representation is distinct from computing a normalized representation from trainable raw \(E\).
 
 \section{Reproducibility}
-The experiment scripts, configurations, numerical result files, and figures are stored in the repository. The main artifact locations are:
+The repository contains experiment scripts, configuration files, numerical results, generated figures, and a research log. Relevant checkpoints are:
 \begin{itemize}
-  \item Experiment 0: \texttt{experiments/00\_embedding\_geometry/}, \texttt{results/00\_embedding\_geometry/}, and \texttt{figures/00\_embedding\_geometry/}.
-  \item Experiment 1: \texttt{experiments/01\_normalization\_placement/} and \texttt{results/01\_normalization\_placement/}.
-  \item Experiment 2: \texttt{experiments/02\_trainable\_embedding\_gradients/} and \texttt{results/02\_trainable\_embedding\_gradients/}.
+\item Experiment 0: \texttt{f3c34aaf5953e66b5980f1615cd7b81f08b46195}.
+\item Experiment 1: \texttt{d8f88daa35ca89060a7890d2ddbc910518c4f3f4}.
+\item Research documentation: \texttt{53455a6ed14e528c7fe81348e8ce795c5cc9bd05}.
+\item Experiment 2: \texttt{5d331e65837b0af52938e55a58b63182cd2697c5}.
 \end{itemize}
-Experiment checkpoints in Git are: Experiment 0, \texttt{f3c34aaf5953e66b5980f1615cd7b81f08b46195}; Experiment 1, \texttt{d8f88daa35ca89060a7890d2ddbc910518c4f3f4}; research log, \texttt{53455a6ed14e528c7fe81348e8ce795c5cc9bd05}; Experiment 2, \texttt{5d331e65837b0af52938e55a58b63182cd2697c5}.
-
-From the repository root, the experiments can be rerun with:
+From the repository root, run:
 \begin{verbatim}
 python -B experiments/00_embedding_geometry/run.py
 python -B experiments/01_normalization_placement/run.py
 python -B experiments/02_trainable_embedding_gradients/run.py
 \end{verbatim}
-Configuration files record seeds, dimensions, token IDs, normalization settings, targets, and tolerances as applicable. Experiment 2 uses PyTorch autodiff; observed environment versions are listed in the metrics artifacts and above.
+Experiment 0 artifacts are in \texttt{results/00\_embedding\_geometry/} and \texttt{figures/00\_embedding\_geometry/}; Experiment 1 artifacts are in \texttt{results/01\_normalization\_placement/}; and Experiment 2 artifacts are in \texttt{results/02\_trainable\_embedding\_gradients/}. The recorded environment was Python 3.12.5, NumPy 2.5.0, Matplotlib 3.11.0, and PyTorch 2.4.1+cpu.
 
 \section{Conclusion}
-Across the three completed toy experiments, row-wise RMSNorm altered Euclidean geometry on a synthetic matrix but preserved cosine similarity to numerical precision. For a fixed table, lookup followed by RMSNorm and RMSNorm of the table followed by lookup produced equal outputs. With one deterministic MSE objective, their gradients with respect to the same trainable table were also numerically equal and nonzero. The algebraic structure explains why these results agree for this row-local operation. It does not establish equivalence for distinct trainable parameterizations, every implementation, optimizer behavior, learned language-model embeddings, or downstream Transformer behavior. Those questions remain open.
+For the tested synthetic matrix, row-wise RMSNorm changed vector magnitudes and pairwise Euclidean distances while leaving cosine similarities unchanged to numerical precision. For this row-local operation, normalization before lookup and after lookup are algebraically identical arrangements of the same table \(E\). The experiments found identical fixed-table outputs and, for one controlled nonzero-gradient loss, numerically equal gradients with respect to \(E\). These results do not establish optimizer behavior, direct optimization of normalized embeddings, or downstream model effects. The broader research question remains open.
 
 \section*{References}
-No external publications are cited in this checkpoint. The motivating course/session discussion has no formal citation metadata in the repository.
+No formal bibliographic sources are available for this checkpoint; no external citations are included.
 
 \end{document}
