@@ -123,3 +123,11 @@ Under a controlled optimization procedure, do the two normalization parameteriza
 ## Planned next experiment
 
 An optimization experiment may compare the parameter updates and resulting embedding representations from the same initialization under a specified task and optimizer. Its objective, update protocol, and measurements must be selected before implementation. Use that evidence to decide whether a larger-scale model experiment is justified. No optimization or Transformer experiment has been implemented.
+
+## Paper documentation checkpoint — 2026-10-05
+
+Created an Overleaf-ready LaTeX report at [paper/main.tex](../paper/main.tex), with an empty [references.bib](../paper/references.bib) because no formal bibliographic sources are present in the repository. The paper documents the research state through Experiments 0--2, states the row-wise algebraic relation between lookup-then-normalize and normalize-table-then-lookup, and distinguishes both from making the normalized representation itself trainable. It includes the existing Experiment 0 figures, copied into [paper/figures/](../paper/figures/), and tables using the checked-in result artifacts. No new experimental results were generated.
+
+Numerical values, formulas, token IDs, environment versions, and experiment commit hashes were checked against the code and result artifacts. The source explicitly limits the gradient result to its one float64 MSE setup and does not claim optimizer or Transformer equivalence. The paper contains no external citations and does not present an Experiment 3 as completed.
+
+Compilation could not be verified in this environment: the built-in LaTeX compiler returned “Unable to find standard directories for platform,” and no local pdfLaTeX, XeLaTeX, LuaLaTeX, or latexmk executable was found. No LaTeX build artifacts were generated. Compile status is therefore unverified; the source is prepared for Overleaf or a configured LaTeX toolchain.

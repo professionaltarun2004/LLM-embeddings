@@ -21,3 +21,7 @@ See the [research log](research/RESEARCH_LOG.md) for the Mermaid investigation f
 - [Experiment 2 — trainable embedding gradients](experiments/02_trainable_embedding_gradients/): [metrics](results/02_trainable_embedding_gradients/metrics.json) and [saved gradients and inputs](results/02_trainable_embedding_gradients/gradients.npz).
 
 The experiments use synthetic embeddings. Experiment 2 computes gradients but performs no optimizer updates; optimization dynamics and Transformer behavior remain untested. See the [research log](research/RESEARCH_LOG.md) for detailed methods and results.
+
+## Paper
+
+An Overleaf-ready LaTeX paper covering the evidence through Experiment 2 is in [paper/](paper/main.tex). It includes the existing Experiment 0 geometry figures and does not claim that the research question is solved.
