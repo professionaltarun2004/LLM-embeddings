@@ -1,0 +1,19 @@
+{
+  "config": {
+    "seed": 1729,
+    "vocabulary_size": 128,
+    "embedding_dim": 32
+  },
+  "raw": {
+    "mean_row_norm": 5.509094782076966,
+    "std_row_norm": 0.6865389691477074,
+    "mean_coordinate": 0.004057382093451679,
+    "std_coordinate": 0.9814041961470878
+  },
+  "rms_normalized": {
+    "mean_row_norm": 5.6568542494923815,
+    "std_row_norm": 1.2486924693357873e-15,
+    "mean_coordinate": 0.0028884287976014816,
+    "std_coordinate": 0.9999958284808398
+  }
+}
